@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BoardSnap — Word vs Word Solver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=4">
+</head>
+<body>
+<header class="nav">
+  <div class="nav-inner">
+    <div class="logo">
+      <div class="logo-mark">⬡</div>
+      <div>
+        <div class="logo-title">BoardSnap</div>
+        <div class="logo-sub">Word vs Word — Hex Solver</div>
+      </div>
+    </div>
+    <div class="nav-links">
+      <span class="badge">SOWPODS 267k</span>
+      <span class="badge" style="background:rgba(212,169,106,0.14);border-color:rgba(212,169,106,0.30);color:#e8c99a">★ Wildcards</span>
+      <a href="/docs" target="_blank" class="nav-docs">API Docs</a>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <!-- HERO / UPLOAD -->
+  <section id="upload-section" class="card hero-upload">
+    <div class="hero-text">
+      <h1>Upload a <span class="accent">Word vs Word</span> board screenshot</h1>
+      <p>Instantly find the highest-scoring & longest words playable on that hex board — with swipe paths drawn right on your image. <strong style="color:#e6c07a">Blank bubbles are wildcards</strong> — the solver tries A-Z for each blank (0 pts, like Scrabble).</p>
+      <ul class="features">
+        <li>Hex-packed staggered grid (5/6 alternating)</li>
+        <li>Blank ★ bubbles = any letter (0 pts) — game’s real backend, not skipped</li>
+        <li>Trie + DFS solver — 267k SOWPODS words in &lt;3s</li>
+      </ul>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <label class="toggle" style="background:rgba(212,169,106,0.10);border:1px solid rgba(212,169,106,0.22);padding:6px 10px;border-radius:999px">
+          <input type="checkbox" id="wildcardToggleHero" checked>
+          <span>★ Use blanks as wildcards (any A-Z)</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/jpg" hidden>
+      <div class="drop-icon">📸</div>
+      <div class="drop-title">Drag & drop your screenshot here</div>
+      <div class="drop-sub">or click to browse — PNG, JPG, WEBP</div>
+      <button class="btn btn-primary" id="browseBtn">Choose Image</button>
+      <div class="drop-hint">Board is the vertical rounded-rect tray on wood. Slight tilt (1–3°) OK. Blanks detected as ★.</div>
+    </div>
+  </section>
+
+  <!-- Example boards -->
+  <section class="examples" id="examples">
+    <div class="examples-head">
+      <h3>Try a demo board</h3>
+      <span>2–3 sample boards — no upload needed</span>
+    </div>
+    <div class="example-grid" id="exampleGrid">
+      <!-- populated by JS -->
+    </div>
+  </section>
+
+  <!-- Processing spinner -->
+  <section id="processing" class="card processing hidden">
+    <div class="spinner"></div>
+    <div>
+      <div class="proc-title">Analyzing board…</div>
+      <div class="proc-sub" id="procSub">Detecting bubbles & reading letters</div>
+    </div>
+  </section>
+
+  <!-- Detection preview & manual fix -->
+  <section id="detect-section" class="card hidden">
+    <div class="section-head">
+      <h2>✓ Detected <span id="detectedCount">0</span> tiles <small id="emptyCountLabel"></small> <small id="wildcardCountLabel" style="color:#d4a96a"></small></h2>
+      <div class="section-actions">
+        <label class="toggle" title="Try every A-Z for each blank (0 pts) — the game's actual logic">
+          <input type="checkbox" id="wildcardToggleDetect" checked>
+          <span>★ Wildcards</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="commonToggleDetect"> 
+          <span>Common only</span>
+        </label>
+        <button class="btn btn-primary" id="solveBtn">Solve Board →</button>
+      </div>
+    </div>
+    <p class="help">Tap any tile to fix its letter. <strong>★ Blank</strong> tiles are <em>wildcards</em> — they can be <strong>any letter A-Z for 0 points</strong> (the game randomly assigns a letter when used). The old wizgames solver skipped them; BoardSnap correctly tries <code>A-Z</code> for each blank. Uncheck ★ to treat blanks as holes (skip).</p>
+    <div id="tileGrid" class="tile-grid"></div>
+    <div class="detect-footer">
+      <button class="btn btn-ghost" id="rescanBtn">Rescan</button>
+      <button class="btn btn-primary" id="solveBtn2">Solve Board →</button>
+    </div>
+    <div class="original-preview">
+      <img id="originalPreview" alt="uploaded preview">
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="results-section" class="hidden">
+    <!-- hero card -->
+    <div class="card hero-result" id="heroCard">
+      <div class="hero-result-left">
+        <div class="hero-badge">★ #1 Recommendation</div>
+        <div class="hero-word" id="heroWord">WORD</div>
+        <div class="hero-meta">
+          <span class="score-pill" id="heroScore">0 pts</span>
+          <span class="len-pill" id="heroLen">0 letters</span>
+          <span class="path-pill" id="heroPathLen"></span>
+          <span class="path-pill" id="heroWildcard" style="background:rgba(212,169,106,0.18);color:#e8c99a;border-color:rgba(212,169,106,0.30);display:none">★ blanks</span>
+        </div>
+        <div class="hero-actions">
+          <a id="heroDownload" class="btn btn-primary" download="boardsnap-best.png">Download Annotated PNG</a>
+          <button class="btn btn-ghost" id="shareBtn">Copy word</button>
+        </div>
+        <div id="trapWarning" class="trap-warning hidden"></div>
+        <div id="wildcardExplain" class="trap-warning hidden" style="background:rgba(95,180,156,0.08);border-color:rgba(95,180,156,0.22);color:#bfe8d8"></div>
+      </div>
+      <div class="hero-result-right">
+        <img id="heroImage" alt="Annotated board">
+      </div>
+    </div>
+
+    <!-- controls -->
+    <div class="results-controls card">
+      <div class="tabs">
+        <button class="tab active" data-tab="score">Top by Score</button>
+        <button class="tab" data-tab="length">Top by Length</button>
+        <button class="tab" data-tab="all">All words</button>
+      </div>
+      <div class="controls-right">
+        <input type="search" id="searchAll" placeholder="Search words… (use * for blank)" class="search">
+        <label class="toggle small" title="Wildcards = any letter">
+          <input type="checkbox" id="wildcardToggle" checked>
+          <span>★ Wildcards</span>
+        </label>
+        <label class="toggle small">
+          <input type="checkbox" id="commonToggle">
+          <span>Common only</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- lists -->
+    <div id="list-score" class="word-list"></div>
+    <div id="list-length" class="word-list hidden"></div>
+    <div id="list-all" class="word-list hidden">
+      <div id="allList"></div>
+      <div class="all-meta" id="allMeta"></div>
+    </div>
+
+    <div class="card re-run">
+      <button class="btn btn-ghost" id="editTilesBtn">← Edit tiles & re-solve</button>
+      <button class="btn btn-primary" id="newUploadBtn">Upload another</button>
+    </div>
+  </section>
+
+  <!-- Error -->
+  <section id="error-section" class="card hidden error-card">
+    <h3>⚠️ Could not solve</h3>
+    <p id="errorMsg">Error details</p>
+    <button class="btn btn-ghost" id="errorDismiss">Dismiss</button>
+  </section>
+</main>
+
+<footer class="footer">
+  <div>BoardSnap • Python + OpenCV + Trie DFS • SOWPODS 267,751 • Blanks ★ = any A-Z (0 pts) — tries A-Z per blank (like game's backend)</div>
+  <div class="footer-links">Scoring: A1 B3 C3 D2 E1 F4 G2 H4 I1 J8 K5 L1 M3 N1 O1 P3 Q10 R1 S1 T1 U1 V4 W4 X8 Y4 Z10 • Blanks 0 pts • Hex neighbors ≤1.30× median</div>
+</footer>
+
+<!-- Tile edit modal -->
+<div id="editModal" class="modal hidden">
+  <div class="modal-content">
+    <h3>Edit tile</h3>
+    <input type="text" id="editInput" maxlength="2" placeholder="A-Z or leave blank">
+    <label class="toggle"><input type="checkbox" id="editWildcard"><span>★ Blank / wildcard (any letter, 0 pts)</span></label>
+    <label class="toggle"><input type="checkbox" id="editEmpty"><span>Hole (skip — not playable)</span></label>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="editCancel">Cancel</button>
+      <button class="btn btn-primary" id="editSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=4"></script>
+</body>
+</html>
